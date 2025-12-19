@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
@@ -12,11 +13,12 @@ import (
 )
 
 var (
-	rootPath   string
-	dryRun     bool
-	skipPrompt bool
-	verbose    bool
-	maxWorkers int
+	rootPath    string
+	dryRun      bool
+	skipPrompt  bool
+	verbose     bool
+	maxWorkers  int
+	targetsFile string
 )
 
 func init() {
@@ -25,7 +27,35 @@ func init() {
 	flag.BoolVar(&skipPrompt, "y", false, "Skip confirmation prompt")
 	flag.BoolVar(&verbose, "v", false, "Verbose output")
 	flag.IntVar(&maxWorkers, "workers", 4, "Maximum number of concurrent workers")
+	flag.StringVar(&targetsFile, "targets", "targets.txt", "File containing directory names to delete")
 	flag.Parse()
+}
+
+func readTargets(filename string) ([]string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("could not open targets file: %v", err)
+	}
+	defer file.Close()
+
+	var targets []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" && !strings.HasPrefix(line, "#") {
+			targets = append(targets, line)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading targets file: %v", err)
+	}
+
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("no valid targets found in %s", filename)
+	}
+
+	return targets, nil
 }
 
 func main() {
@@ -40,7 +70,14 @@ func main() {
 		log.Fatalf("Path does not exist: %s", absRoot)
 	}
 
-	fmt.Printf("🔍 Searching for node_modules and vendor directories in: %s\n", absRoot)
+	// Read targets from file
+	targets, err := readTargets(targetsFile)
+	if err != nil {
+		log.Fatalf("Error reading targets: %v", err)
+	}
+
+	fmt.Printf("🔍 Searching for directories in: %s\n", absRoot)
+	fmt.Printf("🎯 Target directories: %s\n", strings.Join(targets, ", "))
 	if dryRun {
 		fmt.Println("📋 DRY RUN MODE: No directories will be deleted.")
 	}
@@ -68,15 +105,17 @@ func main() {
 		}
 
 		name := d.Name()
-		if name == "node_modules" || name == "vendor" {
-			mu.Lock()
-			dirsToDelete = append(dirsToDelete, path)
-			mu.Unlock()
+		for _, target := range targets {
+			if name == target {
+				mu.Lock()
+				dirsToDelete = append(dirsToDelete, path)
+				mu.Unlock()
 
-			fmt.Printf("📁 Found: %s\n", path)
+				fmt.Printf("📁 Found: %s\n", path)
 
-			// Skip walking inside this directory to save time
-			return filepath.SkipDir
+				// Skip walking inside this directory to save time
+				return filepath.SkipDir
+			}
 		}
 		return nil
 	})
@@ -94,7 +133,7 @@ func main() {
 	}
 
 	if len(dirsToDelete) == 0 {
-		fmt.Println("✅ No node_modules or vendor directories found.")
+		fmt.Println("✅ No target directories found.")
 		return
 	}
 

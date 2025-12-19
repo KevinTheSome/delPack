@@ -1,9 +1,10 @@
-# delPack - Node Modules and Vendor Directory Cleaner
+# delPack - Directory Cleaner
 
-A powerful command-line tool to find and delete `node_modules` and `vendor` directories, helping you reclaim valuable disk space.
+A powerful command-line tool to find and delete directories based on a configurable list of target directory names. Originally designed for `node_modules` and `vendor` directories, now fully customizable.
 
 ## Features
 
+- **Configurable targets**: Read directory names to delete from a targets file
 - **Recursive scanning**: Searches through directories recursively from a specified root path
 - **Size calculation**: Calculates and displays the size of each found directory
 - **Dry run mode**: Preview what would be deleted without actually removing anything
@@ -35,6 +36,8 @@ delpack [flags]
 ```
   -path string
         Root directory to search from (default ".")
+  -targets string
+        File containing directory names to delete (default "targets.txt")
   -dry-run
         Only list directories, don't delete
   -y    Skip confirmation prompt
@@ -43,9 +46,25 @@ delpack [flags]
         Maximum number of concurrent workers (default 4)
 ```
 
+## Configuration
+
+Create a `targets.txt` file with the directory names you want to delete, one per line:
+
+```txt
+# Directory names to delete
+node_modules
+vendor
+dist
+build
+.cache
+.terraform
+```
+
+Lines starting with `#` are treated as comments and ignored.
+
 ## Examples
 
-1. **Basic usage** (scan current directory):
+1. **Basic usage** (scan current directory with default targets.txt):
 ```bash
 delpack
 ```
@@ -70,12 +89,17 @@ delpack -y
 delpack -v
 ```
 
-6. **Combine flags**:
+6. **Use custom targets file**:
 ```bash
-delpack -path /projects -dry-run -v
+delpack -targets my-custom-targets.txt
 ```
 
-7. **Use more workers for faster processing** (on fast storage):
+7. **Combine flags**:
+```bash
+delpack -path /projects -targets production-targets.txt -dry-run -v
+```
+
+8. **Use more workers for faster processing** (on fast storage):
 ```bash
 delpack -workers 8 -v
 ```
@@ -83,7 +107,8 @@ delpack -workers 8 -v
 ## Output Explanation
 
 - **🔍 Searching**: Shows the root directory being scanned
-- **📁 Found**: Lists each discovered `node_modules` or `vendor` directory with its size
+- **🎯 Target directories**: Lists the directory names being searched for
+- **📁 Found**: Lists each discovered target directory with its size
 - **📊 Summary**: Provides statistics about found directories and total size
 - **🗑️ Deleting**: Shows deletion progress (only in non-dry-run mode)
 - **📊 Deletion Results**: Final summary of deleted directories and freed space
@@ -94,6 +119,7 @@ delpack -workers 8 -v
 2. The tool skips directories it can't access (shows warnings in verbose mode)
 3. Deletion errors are reported but don't stop the entire process
 4. Use `-y` flag with caution as it bypasses the confirmation prompt
+5. **Carefully review your targets.txt file** to ensure you're not accidentally targeting important directories
 
 ## Performance Considerations
 
@@ -102,6 +128,16 @@ delpack -workers 8 -v
 - Verbose mode adds overhead but provides useful debugging information
 - The `-workers` flag controls concurrency level (default: 4 workers)
 - Higher worker counts improve performance on SSDs and fast storage
+
+## Default Targets
+
+The default `targets.txt` includes common directories that are often safe to delete:
+- `node_modules` - Node.js dependencies
+- `vendor` - PHP dependencies
+- `dist` - Build output directories
+- `build` - Build directories
+- `.cache` - Cache directories
+- `.terraform` - Terraform cache
 
 ## License
 

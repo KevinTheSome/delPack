@@ -1,0 +1,7 @@
+# Directory names to delete
+node_modules
+vendor
+dist
+build
+.cache
+.terraform
