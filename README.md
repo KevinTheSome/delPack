@@ -11,6 +11,7 @@ A powerful command-line tool to find and delete `node_modules` and `vendor` dire
 - **Verbose mode**: Detailed output for troubleshooting
 - **Error handling**: Gracefully handles permission issues and inaccessible directories
 - **Performance optimized**: Skips walking inside target directories to save time
+- **Concurrent processing**: Uses multiple workers for faster size calculation and deletion
 
 ## Installation
 
@@ -19,14 +20,9 @@ A powerful command-line tool to find and delete `node_modules` and `vendor` dire
 
 ### Build from source
 ```bash
-git clone https://github.com/yourusername/delPack.git
+git clone https://github.com/KevinTheSome/delPack.git
 cd delPack
 go build -o delpack main.go
-```
-
-### Install globally
-```bash
-go install github.com/yourusername/delPack@latest
 ```
 
 ## Usage
@@ -43,6 +39,8 @@ delpack [flags]
         Only list directories, don't delete
   -y    Skip confirmation prompt
   -v    Verbose output
+  -workers int
+        Maximum number of concurrent workers (default 4)
 ```
 
 ## Examples
@@ -77,6 +75,11 @@ delpack -v
 delpack -path /projects -dry-run -v
 ```
 
+7. **Use more workers for faster processing** (on fast storage):
+```bash
+delpack -workers 8 -v
+```
+
 ## Output Explanation
 
 - **🔍 Searching**: Shows the root directory being scanned
@@ -97,6 +100,8 @@ delpack -path /projects -dry-run -v
 - Large directories may take time to scan and calculate sizes
 - The tool skips walking inside target directories after finding them to improve performance
 - Verbose mode adds overhead but provides useful debugging information
+- The `-workers` flag controls concurrency level (default: 4 workers)
+- Higher worker counts improve performance on SSDs and fast storage
 
 ## License
 

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -15,6 +16,7 @@ var (
 	dryRun     bool
 	skipPrompt bool
 	verbose    bool
+	maxWorkers int
 )
 
 func init() {
@@ -22,6 +24,7 @@ func init() {
 	flag.BoolVar(&dryRun, "dry-run", false, "Only list directories, don't delete")
 	flag.BoolVar(&skipPrompt, "y", false, "Skip confirmation prompt")
 	flag.BoolVar(&verbose, "v", false, "Verbose output")
+	flag.IntVar(&maxWorkers, "workers", 4, "Maximum number of concurrent workers")
 	flag.Parse()
 }
 
@@ -43,17 +46,19 @@ func main() {
 	}
 	if verbose {
 		fmt.Println("📢 Verbose mode enabled")
+		fmt.Printf("👷 Using %d concurrent workers\n", maxWorkers)
 	}
 
-	var totalSize int64
 	var dirsToDelete []string
-	var dirSizes []int64
 	var scanErrors []string
+	var mu sync.Mutex
 
 	err = filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			if verbose {
+				mu.Lock()
 				scanErrors = append(scanErrors, fmt.Sprintf("⚠️  Error accessing %s: %v", path, err))
+				mu.Unlock()
 			}
 			return nil // Skip errors and continue
 		}
@@ -64,24 +69,11 @@ func main() {
 
 		name := d.Name()
 		if name == "node_modules" || name == "vendor" {
-			// Calculate directory size
-			if verbose {
-				fmt.Printf("📊 Calculating size for: %s\n", path)
-			}
-
-			size, err := dirSize(path)
-			if err != nil {
-				if verbose {
-					fmt.Printf("⚠️  Could not calculate size of %s: %v\n", path, err)
-				}
-				size = 0
-			}
-
-			totalSize += size
+			mu.Lock()
 			dirsToDelete = append(dirsToDelete, path)
-			dirSizes = append(dirSizes, size)
+			mu.Unlock()
 
-			fmt.Printf("📁 Found: %s (%s)\n", path, formatBytes(size))
+			fmt.Printf("📁 Found: %s\n", path)
 
 			// Skip walking inside this directory to save time
 			return filepath.SkipDir
@@ -104,6 +96,68 @@ func main() {
 	if len(dirsToDelete) == 0 {
 		fmt.Println("✅ No node_modules or vendor directories found.")
 		return
+	}
+
+	// Calculate sizes concurrently
+	fmt.Println("\n📊 Calculating directory sizes...")
+	var totalSize int64
+	var dirSizes []int64
+	var sizeErrors []string
+
+	// Worker pool for size calculation
+	workChan := make(chan string, len(dirsToDelete))
+	resultsChan := make(chan sizeResult, len(dirsToDelete))
+	var wg sync.WaitGroup
+
+	// Start worker pool
+	for i := 0; i < maxWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for path := range workChan {
+				if verbose {
+					fmt.Printf("👷 Worker %d: Calculating size for %s\n", workerID, path)
+				}
+				size, err := dirSize(path)
+				if err != nil {
+					resultsChan <- sizeResult{path: path, size: 0, err: err}
+					continue
+				}
+				resultsChan <- sizeResult{path: path, size: size, err: nil}
+			}
+		}(i)
+	}
+
+	// Send work to workers
+	for _, dir := range dirsToDelete {
+		workChan <- dir
+	}
+	close(workChan)
+
+	// Wait for all workers to finish
+	go func() {
+		wg.Wait()
+		close(resultsChan)
+	}()
+
+	// Collect results
+	for result := range resultsChan {
+		if result.err != nil {
+			if verbose {
+				sizeErrors = append(sizeErrors, fmt.Sprintf("⚠️  Could not calculate size of %s: %v", result.path, result.err))
+			}
+			result.size = 0
+		}
+		totalSize += result.size
+		dirSizes = append(dirSizes, result.size)
+	}
+
+	// Report size calculation errors
+	if len(sizeErrors) > 0 && verbose {
+		fmt.Println("\n📋 Size Calculation Errors:")
+		for _, err := range sizeErrors {
+			fmt.Println(err)
+		}
 	}
 
 	fmt.Printf("\n📊 Summary:\n")
@@ -131,17 +185,53 @@ func main() {
 	var deletedCount int
 	var deleteErrors []string
 
-	for i, dir := range dirsToDelete {
-		fmt.Printf("🗑︸  Deleting: %s ... ", dir)
-		err := os.RemoveAll(dir)
-		if err != nil {
-			errorMsg := fmt.Sprintf("❌ ERROR: %v", err)
-			fmt.Println(errorMsg)
-			deleteErrors = append(deleteErrors, fmt.Sprintf("%s: %v", dir, err))
+	// Worker pool for deletion
+	deleteWorkChan := make(chan int, len(dirsToDelete))
+	deleteResultsChan := make(chan deleteResult, len(dirsToDelete))
+	wg = sync.WaitGroup{}
+
+	// Start worker pool
+	for i := 0; i < maxWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for index := range deleteWorkChan {
+				dir := dirsToDelete[index]
+				if verbose {
+					fmt.Printf("👷 Worker %d: Deleting %s...\n", workerID, dir)
+				}
+				err := os.RemoveAll(dir)
+				if err != nil {
+					deleteResultsChan <- deleteResult{index: index, err: err}
+					continue
+				}
+				deleteResultsChan <- deleteResult{index: index, err: nil}
+			}
+		}(i)
+	}
+
+	// Send work to workers
+	for i := range dirsToDelete {
+		deleteWorkChan <- i
+	}
+	close(deleteWorkChan)
+
+	// Wait for all workers to finish
+	go func() {
+		wg.Wait()
+		close(deleteResultsChan)
+	}()
+
+	// Collect results
+	for result := range deleteResultsChan {
+		if result.err != nil {
+			errorMsg := fmt.Sprintf("❌ ERROR: %v", result.err)
+			fmt.Printf("🗑︸  Deleting: %s %s\n", dirsToDelete[result.index], errorMsg)
+			deleteErrors = append(deleteErrors, fmt.Sprintf("%s: %v", dirsToDelete[result.index], result.err))
 		} else {
-			fmt.Println("✅ Done.")
+			fmt.Printf("🗑︸  Deleting: %s ✅ Done.\n", dirsToDelete[result.index])
 			deletedCount++
-			deletedSize += dirSizes[i]
+			deletedSize += dirSizes[result.index]
 		}
 	}
 
@@ -163,6 +253,18 @@ func main() {
 	} else {
 		fmt.Println("❌ No directories were deleted.")
 	}
+}
+
+// Result types for worker communication
+type sizeResult struct {
+	path string
+	size int64
+	err  error
+}
+
+type deleteResult struct {
+	index int
+	err   error
 }
 
 func dirSize(path string) (int64, error) {
