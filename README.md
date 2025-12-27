@@ -44,6 +44,9 @@ delpack [flags]
   -v    Verbose output
   -workers int
         Maximum number of concurrent workers (default 4)
+  -skip-warning
+        Skip the targets file warning
+
 ```
 
 ## Configuration

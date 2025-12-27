@@ -1,7 +1,78 @@
 # Directory names to delete
+# All hashtags are comments
+
+# JavaScript / Frontend
 node_modules
-vendor
 dist
 build
+out
 .cache
+.parcel-cache
+.next
+.nuxt
+.svelte-kit
+.vite
+.angular
+.turbo
+.expo
+.webpack
+
+# Python
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.tox
+.nox
+build
+dist
+.egg-info
+
+# Java / JVM
+target
+.gradle
+.mvn
+out
+
+# PHP
+vendor
+.phpunit.cache
+.composer-cache
+
+# Ruby
+.bundle
+vendor/bundle
+tmp
+log
+
+# Go
+bin
+pkg
+vendor
+.cache/go-build
+
+# Rust
+target
+
+# .NET
+bin
+obj
+
+# C / C++
+cmake-build-debug
+cmake-build-release
+CMakeFiles
+
+# Mobile
+.gradle
+app/build
+Pods
+DerivedData
+.build
+
+# DevOps / IaC
 .terraform
+.terragrunt-cache
+.pulumi
+.serverless
+.aws-sam

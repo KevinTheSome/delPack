@@ -19,12 +19,14 @@ var (
 	verbose     bool
 	maxWorkers  int
 	targetsFile string
+	skipWarning bool
 )
 
 func init() {
 	flag.StringVar(&rootPath, "path", ".", "Root directory to search from")
 	flag.BoolVar(&dryRun, "dry-run", false, "Only list directories, don't delete")
 	flag.BoolVar(&skipPrompt, "y", false, "Skip confirmation prompt")
+	flag.BoolVar(&skipWarning, "skip-warning", false, "Skip the targets file warning")
 	flag.BoolVar(&verbose, "v", false, "Verbose output")
 	flag.IntVar(&maxWorkers, "workers", 4, "Maximum number of concurrent workers")
 	flag.StringVar(&targetsFile, "targets", "targets.txt", "File containing directory names to delete")
@@ -78,6 +80,9 @@ func main() {
 
 	fmt.Printf("🔍 Searching for directories in: %s\n", absRoot)
 	fmt.Printf("🎯 Target directories: %s\n", strings.Join(targets, ", "))
+	if !skipWarning {
+		fmt.Println("⚠️  WARNING: Please review the targets.txt file to ensure you're not accidentally targeting important directories.")
+	}
 	if dryRun {
 		fmt.Println("📋 DRY RUN MODE: No directories will be deleted.")
 	}
