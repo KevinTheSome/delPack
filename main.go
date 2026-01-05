@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 var (
@@ -229,6 +231,14 @@ func main() {
 	var deletedCount int
 	var deleteErrors []string
 
+	// Initialize progress bar
+	bar := progressbar.NewOptions(
+		int(len(dirsToDelete)),
+		progressbar.OptionSetDescription("Deleting directories..."),
+		progressbar.OptionShowCount(),
+		progressbar.OptionShowIts(),
+	)
+
 	// Worker pool for deletion
 	deleteWorkChan := make(chan int, len(dirsToDelete))
 	deleteResultsChan := make(chan deleteResult, len(dirsToDelete))
@@ -277,6 +287,7 @@ func main() {
 			deletedCount++
 			deletedSize += dirSizes[result.index]
 		}
+		bar.Add(1)
 	}
 
 	// Report deletion errors if any

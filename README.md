@@ -19,6 +19,12 @@ A powerful command-line tool to find and delete directories based on a configura
 ### Prerequisites
 - Go 1.16 or higher
 
+### Download dependencies
+Before building, ensure all Go dependencies are downloaded:
+```bash
+go mod download
+```
+
 ### Build from source
 ```bash
 git clone https://github.com/KevinTheSome/delPack.git
